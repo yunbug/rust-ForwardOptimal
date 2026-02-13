@@ -46,7 +46,18 @@ forward-optimal -c /root/config.yaml
 
 ```
 
+
+
 ### 其他（进程守护）
+
+```shell
+mkdir /etc/forward-optimal/
+wget -P /etc/forward-optimal "https://github.com/yunbug/rust-ForwardOptimal/releases/download/v1.0.0/forward-optimal"
+chmod 777 /etc/forward-optimal/forward-optimal
+
+```
+
+### （进程守护）
 ```code
 echo ' 
 [Unit]
@@ -77,16 +88,16 @@ WantedBy=multi-user.target
 systemctl daemon-reload
 
 # 启动
-systemctl start ForwardOptimal.service
+systemctl start forward-optimal.service
 
 #查询
-systemctl status ForwardOptimal.service
+systemctl status forward-optimal.service
 
 # 设置开机自启
-systemctl enable ForwardOptimal
+systemctl enable forward-optimal
 
 #重启 ！！！ 注意，每次修改配置文件都需要重启
-systemctl restart ForwardOptimal
+systemctl restart forward-optimal
 
 ```
 
