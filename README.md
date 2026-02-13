@@ -40,7 +40,7 @@ targets:
 ##  启动方式
 ```code
 
-forward-optimal /root/config.yaml
+forward-optimal -c /root/config.yaml
 
 ```
 
@@ -61,7 +61,7 @@ LimitRSS=infinity
 LimitCORE=infinity
 LimitNOFILE=999999999
 WorkingDirectory=/etc/forward-optimal/
-ExecStart=/etc/forward-optimal/forward-optimal
+ExecStart=/etc/forward-optimal/forward-optimal -c /root/config.yaml
 Restart=always
 RestartSec=10
 
