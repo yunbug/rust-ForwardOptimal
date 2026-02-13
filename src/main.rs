@@ -14,7 +14,7 @@ use tokio::sync::RwLock;
 #[derive(Parser, Debug)]
 #[command(name = "forward-optimal")]
 #[command(author = "YY")]
-#[command(version = "1.0.0")] 
+#[command(version = "1.0.1")] 
 #[command(about = "forward-optimal 高性能 TCP 最优路径转发工具,基于RUST开发", long_about = None)]
 
 struct Args {
@@ -22,7 +22,7 @@ struct Args {
     #[arg(short = 'c', long, default_value = "config.yaml")]
     config: String,
 
-    /// 是否显示版本信息 (clap 默认支持 -V 和 --version，这里显式说明)
+    /// 是否显示版本信息
     #[arg(short = 'v', long, action = clap::ArgAction::Version)]
     version: Option<bool>,
 }
@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
     // 初始化日志
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    // 2. 加载配置 (使用 args.config 指定的路径)
+    // 2. 加载配置
     let config_content = std::fs::read_to_string(&args.config)
         .with_context(|| format!("无法读取配置文件: {}", args.config))?;
     let config: Config = serde_yaml::from_str(&config_content)
@@ -79,6 +79,8 @@ async fn main() -> Result<()> {
                 s.best = Some(best_node.clone());
                 log::info!(">>> 最优节点: [{}] ({}) - {}ms", 
                     best_node.name, best_node.addr, best_node.rtt.as_millis());
+            } else {
+                log::warn!(">>> 本轮探测未找到可用节点");
             }
             log::info!("--------------------------------------------------");
             tokio::time::sleep(Duration::from_secs(config_clone.update_interval)).await;
@@ -109,12 +111,43 @@ async fn perform_parallel_check(targets: &[TargetConfig]) -> Option<BestTarget> 
     let tasks = targets.iter().map(|t| {
         let t = t.clone();
         async move {
-            let addr = tokio::net::lookup_host(&t.addr).await.ok()?.next()?;
+            // 1. 处理 DNS 解析错误
+            let addr = match tokio::net::lookup_host(&t.addr).await {
+                Ok(mut addrs) => match addrs.next() {
+                    Some(a) => a,
+                    None => {
+                        log::warn!("  [失败] 节点: {:<10} | 地址: {:<20} | 错误: DNS解析无结果", t.name, t.addr);
+                        return None;
+                    }
+                },
+                Err(e) => {
+                    log::warn!("  [失败] 节点: {:<10} | 地址: {:<20} | 错误: DNS解析失败 - {}", t.name, t.addr, e);
+                    return None;
+                }
+            };
+
             let start = Instant::now();
-            tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(addr)).await.ok()?.ok()?;
-            let rtt = start.elapsed();
-            log::info!("  [成功] 节点: {:<10} | 地址: {:<20} | 延迟: {}ms", t.name, addr, rtt.as_millis());
-            Some(BestTarget { addr, name: t.name, rtt })
+            // 2. 处理连接超时与连接拒绝
+            let connect_result = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(addr)).await;
+
+            match connect_result {
+                // Timeout 实际上返回的是 Ok(Result<TcpStream>) 或 Err(Elapsed)
+                Ok(tcp_result) => match tcp_result {
+                    Ok(_) => {
+                        let rtt = start.elapsed();
+                        log::info!("  [成功] 节点: {:<10} | 地址: {:<20} | 延迟: {}ms", t.name, addr, rtt.as_millis());
+                        Some(BestTarget { addr, name: t.name, rtt })
+                    },
+                    Err(e) => {
+                        log::warn!("  [失败] 节点: {:<10} | 地址: {:<20} | 错误: 连接拒绝/IO错误 - {}", t.name, addr, e);
+                        None
+                    }
+                },
+                Err(_) => {
+                    log::warn!("  [失败] 节点: {:<10} | 地址: {:<20} | 错误: 连接超时 (2s)", t.name, addr);
+                    None
+                }
+            }
         }
     });
     let results = join_all(tasks).await;
