@@ -1,4 +1,5 @@
 # rust-ForwardOptimal
+v2
 rust-ForwardOptimal
 这是一个高性能的 TCP 自动走低延迟 转发工具。它的核心逻辑是：“通过并发探测选出延迟最低的转发目标节点，并将流量实时转发过去”。
 
