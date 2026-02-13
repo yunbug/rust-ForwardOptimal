@@ -38,5 +38,52 @@ targets:
 ```
 
 # 启动方式
+```code
+
 forward-optimal /root/config.yaml
 
+```
+
+### 其他（进程守护）
+```code
+echo ' 
+[Unit]
+Description=forward-optimal
+After=network.target
+Wants=network.target
+
+[Service]
+User=root
+Group=root
+Type=simple
+LimitAS=infinity
+LimitRSS=infinity
+LimitCORE=infinity
+LimitNOFILE=999999999
+WorkingDirectory=/etc/forward-optimal/
+ExecStart=/etc/forward-optimal/forward-optimal
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+' >/etc/systemd/system/forward-optimal.service
+```
+
+```code
+# 初始化
+systemctl daemon-reload
+
+# 启动
+systemctl start ForwardOptimal.service
+
+#查询
+systemctl status ForwardOptimal.service
+
+# 设置开机自启
+systemctl enable ForwardOptimal
+
+#重启 ！！！ 注意，每次修改配置文件都需要重启
+systemctl restart ForwardOptimal
+
+```
